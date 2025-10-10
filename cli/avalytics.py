@@ -350,6 +350,132 @@ def crm():
     pass
 
 
+@cli.group()
+def monday():
+    """Monday.com integration for CRM"""
+    pass
+
+
+@monday.command('create')
+@click.option('--name', default='Avalytics Wallet Intelligence', help='Board name')
+def monday_create(name):
+    """Create a new Monday.com board for wallet tracking"""
+    sys.path.append(str(Path(__file__).parent.parent))
+    from integrations.monday_client import MondayClient
+
+    try:
+        client = MondayClient()
+        board_id = client.create_board(name)
+        console.print(f"[green][+] Created Monday.com board: {name}[/green]")
+        console.print(f"[cyan]Board ID: {board_id}[/cyan]")
+        console.print(f"\nNext: Run [bold]avalytics.py monday sync {board_id}[/bold] to sync wallets")
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+
+
+@monday.command('sync')
+@click.argument('board_id')
+@click.option('--limit', '-n', default=100, help='Number of wallets to sync')
+@click.option('--min-volume', type=float, help='Minimum volume in AVAX')
+@click.option('--whale-only', is_flag=True, help='Sync only whale wallets')
+def monday_sync(board_id, limit, min_volume, whale_only):
+    """Sync wallets from Avalytics to Monday.com board"""
+    sys.path.append(str(Path(__file__).parent.parent))
+    from integrations.monday_client import MondayClient
+    import sqlite3
+
+    db_path = config.get('db_path')
+    client = MondayClient()
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    # Build query based on filters
+    where_clauses = []
+    params = []
+
+    if min_volume:
+        where_clauses.append("CAST(total_volume_wei AS REAL) >= ?")
+        params.append(min_volume * 10**18)
+
+    if whale_only:
+        where_clauses.append("is_whale = 1")
+
+    where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+    cursor.execute(f'''
+        SELECT
+            wallet_address,
+            total_txs,
+            total_volume_wei,
+            is_whale,
+            is_bot,
+            is_dex_user,
+            last_active
+        FROM wallet_profiles
+        WHERE {where_sql}
+        ORDER BY CAST(total_volume_wei AS REAL) DESC
+        LIMIT ?
+    ''', params + [limit])
+
+    wallets = []
+    for row in cursor.fetchall():
+        wallet_type = "WHALE" if row[3] else ("BOT" if row[4] else ("DEX" if row[5] else "RETAIL"))
+
+        wallets.append({
+            "address": row[0],
+            "tx_count": row[1],
+            "volume_avax": int(row[2]) / 10**18,
+            "wallet_type": wallet_type,
+            "risk_level": "HIGH" if row[3] else "LOW",
+            "last_active": row[6],
+            "contact_status": "NEW"
+        })
+
+    conn.close()
+
+    if not wallets:
+        console.print("[yellow]No wallets found matching criteria[/yellow]")
+        return
+
+    console.print(f"[*] Syncing {len(wallets)} wallets to Monday.com...")
+
+    try:
+        item_ids = client.bulk_sync_wallets(board_id, wallets)
+        console.print(f"[green][+] Successfully synced {len(item_ids)} wallets to Monday.com[/green]")
+    except Exception as e:
+        console.print(f"[red]Error syncing: {e}[/red]")
+
+
+@monday.command('list')
+def monday_list():
+    """List all Monday.com boards"""
+    sys.path.append(str(Path(__file__).parent.parent))
+    from integrations.monday_client import MondayClient
+
+    try:
+        client = MondayClient()
+        boards = client.get_boards()
+
+        table = Table(title="Monday.com Boards", box=box.MINIMAL_DOUBLE_HEAD)
+        table.add_column("ID", style="cyan")
+        table.add_column("Name")
+        table.add_column("Type", style="yellow")
+        table.add_column("State", style="green")
+
+        for board in boards:
+            table.add_row(
+                board['id'],
+                board['name'],
+                board['board_kind'],
+                board['state']
+            )
+
+        console.print(table)
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+
+
 @crm.command('add')
 @click.argument('address')
 @click.option('--name', help='Contact name')
