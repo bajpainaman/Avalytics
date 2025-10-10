@@ -1,0 +1,23 @@
+# Avalytics Configuration
+
+# RPC Endpoint - use your local node or QuickNode
+rpc_url: "https://api.avax.network/ext/bc/C/rpc"
+
+# Database
+db:
+  host: "localhost"
+  port: 5432
+  database: "avalytics"
+  user: "postgres"
+  password: "postgres"
+
+# Indexer settings
+indexer:
+  start_block: 0  # Set to specific block or 0 for latest
+  batch_size: 100  # Blocks per batch
+  max_workers: 4   # Parallel workers
+
+# Analytics
+analytics:
+  min_tx_count: 5    # Minimum txs to create profile
+  whale_threshold: 100000  # USD value for whale classification
