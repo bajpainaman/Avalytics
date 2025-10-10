@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  avalytics:
+    build: .
+    container_name: avalytics
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python cli/terminal.py
+    networks:
+      - avalytics-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - avalytics-network
+
+networks:
+  avalytics-network:
+    driver: bridge
+
+volumes:
+  ollama-data:

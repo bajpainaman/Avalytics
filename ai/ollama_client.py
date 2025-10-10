@@ -9,8 +9,8 @@ import os
 
 class OllamaClient:
     def __init__(self, base_url: str = None, model: str = None):
-        self.base_url = base_url or os.getenv("OLLAMA_URL", "http://localhost:11434")
-        self.model = model or os.getenv("OLLAMA_MODEL", "llama3")
+        self.base_url = base_url or os.getenv("OLLAMA_URL", "http://10.246.250.44:11434")
+        self.model = model or os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 
     def query(self, prompt: str, system_prompt: str = None) -> str:
         """Send a query to Ollama"""

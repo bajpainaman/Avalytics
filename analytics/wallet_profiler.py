@@ -61,8 +61,8 @@ class WalletProfiler:
 
         tx_count, first_seen, last_active, total_sent, avg_tx_value, unique_contracts = stats
 
-        # Whale detection (>100 ETH equivalent in wei)
-        is_whale = 1 if total_sent and total_sent > 100 * 10**18 else 0
+        # Whale detection (>100 AVAX equivalent in wei)
+        is_whale = 1 if total_sent and int(total_sent) > 100 * 10**18 else 0
 
         # Bot detection (high frequency, low variance)
         cursor.execute('''
@@ -86,8 +86,8 @@ class WalletProfiler:
              unique_contracts, is_whale, is_bot, is_dex_user, avg_tx_value_wei, last_updated)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            wallet_address, first_seen, last_active, tx_count, total_sent,
-            unique_contracts, is_whale, is_bot, is_dex_user, avg_tx_value,
+            wallet_address, first_seen, last_active, tx_count, str(total_sent) if total_sent else '0',
+            unique_contracts, is_whale, is_bot, is_dex_user, str(avg_tx_value) if avg_tx_value else '0',
             datetime.now()
         ))
 

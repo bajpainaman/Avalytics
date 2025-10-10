@@ -71,7 +71,7 @@ class BlockExtractor:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     tx['hash'], tx['block_number'], tx['from_address'], tx['to_address'],
-                    tx['value'], tx['gas_price'], tx['gas_used'], tx['status'],
+                    str(tx['value']), str(tx['gas_price']), tx['gas_used'], tx['status'],
                     tx['timestamp'], tx['input_data']
                 ))
 
