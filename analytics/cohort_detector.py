@@ -18,7 +18,7 @@ class CohortDetector:
 
     def detect_cohorts(self, n_clusters: int = 5):
         """Detect wallet cohorts using K-means clustering"""
-        print(f"\n🎯 Detecting {n_clusters} cohorts...")
+        print(f"\n[*] Detecting {n_clusters} cohorts...")
 
         conn = sqlite3.connect(self.db_path)
 
@@ -68,7 +68,7 @@ class CohortDetector:
         conn.commit()
         conn.close()
 
-        print(f"✅ Tagged {len(df)} wallets into cohorts")
+        print(f"[+] Tagged {len(df)} wallets into cohorts")
         print(f"\nCohort distribution:")
         print(df['cluster'].value_counts())
 

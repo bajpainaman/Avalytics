@@ -89,9 +89,9 @@ class Dashboard:
 
         for wallet, txs, vol, contracts, whale, bot, dex in wallets:
             flags = []
-            if whale: flags.append("🐋")
-            if bot: flags.append("🤖")
-            if dex: flags.append("💱")
+            if whale: flags.append("")
+            if bot: flags.append("")
+            if dex: flags.append("")
 
             table.add_row(
                 wallet[:10] + "..." + wallet[-8:],

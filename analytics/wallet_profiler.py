@@ -16,7 +16,7 @@ class WalletProfiler:
 
     def build_profiles(self):
         """Build wallet profiles from transactions"""
-        print("\n🧠 Building wallet profiles...")
+        print("\n[*] Building wallet profiles...")
 
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -40,7 +40,7 @@ class WalletProfiler:
 
         conn.commit()
         conn.close()
-        print(f"✅ Profiled {len(wallets)} wallets")
+        print(f"[+] Profiled {len(wallets)} wallets")
 
     def _profile_wallet(self, cursor, wallet_address: str):
         """Profile a single wallet"""

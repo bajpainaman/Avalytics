@@ -21,8 +21,8 @@ class BlockExtractor:
         if not self.w3.is_connected():
             raise Exception(f"Failed to connect to {rpc_url}")
 
-        print(f"✅ Connected to Avalanche C-Chain")
-        print(f"   Latest block: {self.w3.eth.block_number:,}")
+        print(f"[+] Connected to Avalanche C-Chain")
+        print(f"    Latest block: {self.w3.eth.block_number:,}")
 
     def get_block_with_txs(self, block_number: int):
         """Fetch block with full transaction details"""
@@ -52,7 +52,7 @@ class BlockExtractor:
                 'transactions': txs
             }
         except Exception as e:
-            print(f"❌ Error fetching block {block_number}: {e}")
+            print(f"[-] Error fetching block {block_number}: {e}")
             return None
 
     def save_to_db(self, blocks_data):
@@ -77,11 +77,11 @@ class BlockExtractor:
 
         conn.commit()
         conn.close()
-        print(f"✅ Saved to database")
+        print(f"[+] Saved to database")
 
     def extract_range(self, start_block: int, end_block: int):
         """Extract a range of blocks"""
-        print(f"\n📦 Extracting blocks {start_block:,} to {end_block:,}")
+        print(f"\n[*] Extracting blocks {start_block:,} to {end_block:,}")
 
         blocks_data = []
         with ThreadPoolExecutor(max_workers=config.MAX_WORKERS) as executor:

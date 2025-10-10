@@ -52,11 +52,11 @@ class LogsExtractor:
             conn.commit()
             conn.close()
 
-            print(f"✅ Extracted {len(logs)} logs")
+            print(f"[+] Extracted {len(logs)} logs")
             return len(logs)
 
         except Exception as e:
-            print(f"❌ Error extracting logs: {e}")
+            print(f"[-] Error extracting logs: {e}")
             return 0
 
 if __name__ == "__main__":

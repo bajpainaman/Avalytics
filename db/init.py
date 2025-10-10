@@ -26,7 +26,7 @@ def init_database(db_path: str = config.DB_PATH):
     conn.commit()
     conn.close()
 
-    print("✅ Database initialized")
+    print("[+] Database initialized")
 
 if __name__ == "__main__":
     init_database()
