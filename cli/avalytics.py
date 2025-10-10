@@ -378,7 +378,8 @@ def monday_create(name):
 @click.option('--limit', '-n', default=100, help='Number of wallets to sync')
 @click.option('--min-volume', type=float, help='Minimum volume in AVAX')
 @click.option('--whale-only', is_flag=True, help='Sync only whale wallets')
-def monday_sync(board_id, limit, min_volume, whale_only):
+@click.option('--with-ai', is_flag=True, help='Include AI analysis for each wallet')
+def monday_sync(board_id, limit, min_volume, whale_only, with_ai):
     """Sync wallets from Avalytics to Monday.com board"""
     sys.path.append(str(Path(__file__).parent.parent))
     from integrations.monday_client import MondayClient
@@ -419,10 +420,18 @@ def monday_sync(board_id, limit, min_volume, whale_only):
     ''', params + [limit])
 
     wallets = []
+
+    # Optionally get AI analyzer
+    analyzer = None
+    if with_ai:
+        from ai.structured_analyzer import StructuredAnalyzer
+        analyzer = StructuredAnalyzer(db_path)
+        console.print("[dim]AI analysis enabled - this will be slower...[/dim]")
+
     for row in cursor.fetchall():
         wallet_type = "WHALE" if row[3] else ("BOT" if row[4] else ("DEX" if row[5] else "RETAIL"))
 
-        wallets.append({
+        wallet_data = {
             "address": row[0],
             "tx_count": row[1],
             "volume_avax": int(row[2]) / 10**18,
@@ -430,7 +439,27 @@ def monday_sync(board_id, limit, min_volume, whale_only):
             "risk_level": "HIGH" if row[3] else "LOW",
             "last_active": row[6],
             "contact_status": "NEW"
-        })
+        }
+
+        # Add AI analysis if requested
+        if with_ai and analyzer:
+            try:
+                profile = analyzer.analyze_wallet_structured(row[0])
+                wallet_data["ai_analysis"] = f"""Type: {profile.wallet_type}
+Risk: {profile.risk_level}
+Activity: {profile.activity_pattern}
+Use Case: {profile.primary_use_case}
+Sophistication: {profile.sophistication_score}/10
+
+Key Insights:
+{chr(10).join(f'- {i}' for i in profile.key_insights[:3])}
+
+Approach: {profile.recommended_approach}"""
+            except Exception as e:
+                console.print(f"[dim][-] AI analysis failed for {row[0][:10]}...: {e}[/dim]")
+                wallet_data["ai_analysis"] = ""
+
+        wallets.append(wallet_data)
 
     conn.close()
 

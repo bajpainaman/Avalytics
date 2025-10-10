@@ -8,6 +8,7 @@ import json
 import os
 from typing import List, Dict, Optional
 from datetime import datetime
+import time
 
 
 class MondayClient:
@@ -83,19 +84,17 @@ class MondayClient:
 
     def _setup_wallet_columns(self, board_id: str):
         """Setup custom columns for wallet tracking"""
-        columns = [
+        # First create basic columns
+        basic_columns = [
             {"title": "Wallet Address", "column_type": "text"},
             {"title": "Total Volume (AVAX)", "column_type": "numbers"},
             {"title": "Transaction Count", "column_type": "numbers"},
-            {"title": "Wallet Type", "column_type": "status"},
-            {"title": "Risk Level", "column_type": "status"},
             {"title": "Last Active", "column_type": "date"},
             {"title": "Tags", "column_type": "tags"},
-            {"title": "AI Analysis", "column_type": "long_text"},
-            {"title": "Contact Status", "column_type": "status"}
+            {"title": "AI Analysis", "column_type": "long_text"}
         ]
 
-        for col in columns:
+        for col in basic_columns:
             query = """
             mutation ($boardId: ID!, $title: String!, $columnType: ColumnType!) {
                 create_column (board_id: $boardId, title: $title, column_type: $columnType) {
@@ -116,8 +115,75 @@ class MondayClient:
             except Exception as e:
                 print(f"[-] Warning: Could not create column {col['title']}: {e}")
 
-    def add_wallet_item(self, board_id: str, wallet_data: Dict) -> str:
+        # Create status columns with custom labels
+        status_columns = [
+            {
+                "title": "Wallet Type",
+                "labels": {"0": "WHALE", "1": "BOT", "2": "DEX", "3": "RETAIL"}
+            },
+            {
+                "title": "Risk Level",
+                "labels": {"0": "HIGH", "1": "MEDIUM", "2": "LOW"}
+            },
+            {
+                "title": "Contact Status",
+                "labels": {"0": "NEW", "1": "CONTACTED", "2": "QUALIFIED", "3": "CLOSED"}
+            }
+        ]
+
+        for col in status_columns:
+            query = """
+            mutation ($boardId: ID!, $title: String!, $labels: JSON!) {
+                create_column (
+                    board_id: $boardId,
+                    title: $title,
+                    column_type: status,
+                    defaults: $labels
+                ) {
+                    id
+                    title
+                }
+            }
+            """
+
+            variables = {
+                "boardId": board_id,
+                "title": col["title"],
+                "labels": json.dumps(col["labels"])
+            }
+
+            try:
+                self.query(query, variables)
+            except Exception as e:
+                print(f"[-] Warning: Could not create status column {col['title']}: {e}")
+
+    def get_board_columns(self, board_id: str) -> Dict[str, str]:
+        """Get column IDs for a board"""
+        query = """
+        query ($boardId: [ID!]) {
+            boards (ids: $boardId) {
+                columns {
+                    id
+                    title
+                    type
+                }
+            }
+        }
+        """
+
+        result = self.query(query, {"boardId": [board_id]})
+        columns = result["boards"][0]["columns"]
+
+        # Map title to ID
+        column_map = {col["title"]: col["id"] for col in columns}
+        return column_map
+
+    def add_wallet_item(self, board_id: str, wallet_data: Dict, column_map: Dict[str, str] = None) -> str:
         """Add a wallet as an item to Monday.com board"""
+
+        if not column_map:
+            column_map = self.get_board_columns(board_id)
+
         query = """
         mutation ($boardId: ID!, $itemName: String!, $columnValues: JSON!) {
             create_item (
@@ -130,23 +196,44 @@ class MondayClient:
         }
         """
 
-        # Prepare column values
+        # Prepare column values using actual column IDs
         wallet_address = wallet_data.get("address", "Unknown")
-        column_values = {
-            "text": wallet_address[:20] + "...",
-            "numbers": str(wallet_data.get("volume_avax", 0)),
-            "numbers4": str(wallet_data.get("tx_count", 0)),
-            "status": wallet_data.get("wallet_type", "RETAIL"),
-            "status7": wallet_data.get("risk_level", "LOW"),
-            "date": wallet_data.get("last_active", datetime.now().isoformat()),
-            "tags": {"tag_ids": wallet_data.get("tag_ids", [])},
-            "long_text": wallet_data.get("ai_analysis", ""),
-            "status4": wallet_data.get("contact_status", "NEW")
-        }
+        column_values = {}
+
+        # Text column - Wallet Address
+        column_values["text_mkwkzjba"] = wallet_address
+
+        # Number columns
+        column_values["numeric_mkwkeqrg"] = str(wallet_data.get("volume_avax", 0))
+        column_values["numeric_mkwkz2rn"] = str(wallet_data.get("tx_count", 0))
+
+        # Status columns - use index (0, 1, 2) instead of label
+        wallet_type = wallet_data.get("wallet_type", "RETAIL")
+        type_map = {"WHALE": 0, "BOT": 1, "DEX": 2, "RETAIL": 2}
+        column_values["color_mkwk6bwx"] = {"index": type_map.get(wallet_type, 2)}
+
+        risk_level = wallet_data.get("risk_level", "LOW")
+        risk_map = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
+        column_values["color_mkwkewf2"] = {"index": risk_map.get(risk_level, 2)}
+
+        # Date column
+        date_str = wallet_data.get("last_active", "")
+        if date_str:
+            column_values["date_mkwkmt8e"] = {"date": date_str[:10]}
+
+        # Contact status
+        contact_status = wallet_data.get("contact_status", "NEW")
+        status_map = {"NEW": 0, "CONTACTED": 1, "QUALIFIED": 2, "CLOSED": 3}
+        column_values["color_mkwkcg49"] = {"index": status_map.get(contact_status, 0)}
+
+        # AI Analysis long text
+        ai_analysis = wallet_data.get("ai_analysis", "")
+        if ai_analysis:
+            column_values["long_text_mkwk2g0e"] = {"text": ai_analysis}
 
         variables = {
             "boardId": board_id,
-            "itemName": f"Wallet: {wallet_address[:10]}...{wallet_address[-8:]}",
+            "itemName": wallet_address,
             "columnValues": json.dumps(column_values)
         }
 
@@ -161,15 +248,32 @@ class MondayClient:
 
         print(f"[*] Syncing {len(wallets)} wallets to Monday.com board {board_id}...")
 
+        # Get column map once to avoid repeated API calls
+        column_map = self.get_board_columns(board_id)
+        print(f"[*] Found {len(column_map)} columns on board")
+
         for i, wallet in enumerate(wallets):
             try:
-                item_id = self.add_wallet_item(board_id, wallet)
+                item_id = self.add_wallet_item(board_id, wallet, column_map)
                 item_ids.append(item_id)
+
+                # Rate limiting: sleep 0.5s between requests to avoid 429 errors
+                time.sleep(0.5)
 
                 if (i + 1) % 10 == 0:
                     print(f"    Synced {i + 1}/{len(wallets)} wallets...")
             except Exception as e:
-                print(f"[-] Error syncing wallet {wallet.get('address', 'unknown')}: {e}")
+                if "429" in str(e):
+                    print(f"[-] Rate limited, waiting 5 seconds...")
+                    time.sleep(5)
+                    # Retry once
+                    try:
+                        item_id = self.add_wallet_item(board_id, wallet)
+                        item_ids.append(item_id)
+                    except:
+                        print(f"[-] Failed to sync wallet {wallet.get('address', 'unknown')}")
+                else:
+                    print(f"[-] Error syncing wallet {wallet.get('address', 'unknown')}: {e}")
 
         print(f"[+] Successfully synced {len(item_ids)} wallets")
         return item_ids
