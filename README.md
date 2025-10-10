@@ -1,7 +1,7 @@
 # Avalytics
 
 Professional blockchain intelligence platform for Avalanche. A Palantir/Gotham-style analytics system for on-chain data.
-## Blockchain Analytics Dashboard Screenshot
+## GUI Dashbaord
 
 [![Blockchain Analytics Screenshot](https://raw.githubusercontent.com/bajpainaman/Avalytics/main/dash.png)](https://view.monday.com/embed/18159692247-c0ef45d2f94a1157e7768d03a0dc2929?r=use1)
 ## Features
