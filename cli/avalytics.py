@@ -379,7 +379,8 @@ def monday_create(name):
 @click.option('--min-volume', type=float, help='Minimum volume in AVAX')
 @click.option('--whale-only', is_flag=True, help='Sync only whale wallets')
 @click.option('--with-ai', is_flag=True, help='Include AI analysis for each wallet')
-def monday_sync(board_id, limit, min_volume, whale_only, with_ai):
+@click.option('--with-research', is_flag=True, help='Include web research (Grok/Perplexity)')
+def monday_sync(board_id, limit, min_volume, whale_only, with_ai, with_research):
     """Sync wallets from Avalytics to Monday.com board"""
     sys.path.append(str(Path(__file__).parent.parent))
     from integrations.monday_client import MondayClient
@@ -458,6 +459,32 @@ Approach: {profile.recommended_approach}"""
             except Exception as e:
                 console.print(f"[dim][-] AI analysis failed for {row[0][:10]}...: {e}[/dim]")
                 wallet_data["ai_analysis"] = ""
+
+        # Add web research if requested
+        if with_research:
+            try:
+                from integrations.perplexity_client import PerplexityClient
+                research_client = PerplexityClient()
+
+                console.print(f"[dim]Researching {row[0][:10]}... with web search...[/dim]")
+                entity_info = research_client.research_wallet_entity(row[0])
+                scam_info = research_client.check_scam_indicators(row[0])
+
+                research_text = f"""
+ENTITY RESEARCH:
+{entity_info['entity_info']}
+
+RISK CHECK:
+{scam_info['scam_check']}
+Risk Level: {scam_info['risk_level']}
+"""
+                if wallet_data.get("ai_analysis"):
+                    wallet_data["ai_analysis"] += f"\n\nWEB RESEARCH:{research_text}"
+                else:
+                    wallet_data["ai_analysis"] = research_text
+
+            except Exception as e:
+                console.print(f"[dim][-] Web research failed for {row[0][:10]}...: {e}[/dim]")
 
         wallets.append(wallet_data)
 
