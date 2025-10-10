@@ -9,7 +9,7 @@ from pathlib import Path
 from web3 import Web3
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-import config
+from . import config
 
 class BlockExtractor:
     def __init__(self, rpc_url: str = config.RPC_URL, db_path: str = config.DB_PATH):

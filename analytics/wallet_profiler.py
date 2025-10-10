@@ -44,25 +44,39 @@ class WalletProfiler:
 
     def _profile_wallet(self, cursor, wallet_address: str):
         """Profile a single wallet"""
-        # Get transaction stats
+        # Get basic transaction stats
         cursor.execute('''
             SELECT
                 COUNT(*) as tx_count,
                 MIN(timestamp) as first_seen,
                 MAX(timestamp) as last_active,
-                SUM(CASE WHEN from_address = ? THEN value ELSE 0 END) as total_sent,
-                AVG(CASE WHEN from_address = ? THEN value ELSE 0 END) as avg_tx_value,
                 COUNT(DISTINCT CASE WHEN from_address = ? THEN to_address END) as unique_contracts
             FROM transactions
             WHERE from_address = ? OR to_address = ?
-        ''', (wallet_address, wallet_address, wallet_address, wallet_address, wallet_address))
+        ''', (wallet_address, wallet_address, wallet_address))
 
         stats = cursor.fetchone()
+        tx_count, first_seen, last_active, unique_contracts = stats
 
-        tx_count, first_seen, last_active, total_sent, avg_tx_value, unique_contracts = stats
+        # Calculate volume in Python to avoid SQLite integer overflow
+        cursor.execute('''
+            SELECT value
+            FROM transactions
+            WHERE from_address = ?
+        ''', (wallet_address,))
+
+        total_sent = 0
+        value_count = 0
+        for row in cursor.fetchall():
+            if row[0]:
+                val = int(row[0])
+                total_sent += val
+                value_count += 1
+
+        avg_tx_value = total_sent // value_count if value_count > 0 else 0
 
         # Whale detection (>100 AVAX equivalent in wei)
-        is_whale = 1 if total_sent and int(total_sent) > 100 * 10**18 else 0
+        is_whale = 1 if total_sent > 100 * 10**18 else 0
 
         # Bot detection (high frequency, low variance)
         cursor.execute('''
