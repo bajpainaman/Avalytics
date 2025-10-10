@@ -1,7 +1,7 @@
 # Avalytics
 
 Professional blockchain intelligence platform for Avalanche. A Palantir/Gotham-style analytics system for on-chain data.
-<iframe src="https://view.monday.com/embed/18159692247-c0ef45d2f94a1157e7768d03a0dc2929?r=use1" width=770 height=500 style="border: 0; box-shadow: 5px 5px 56px 0px rgba(0,0,0,0.25);"></iframe>
+[![Blockchain Analytics Screenshot](screenshot_url)](https://view.monday.com/embed/18159692247-c0ef45d2f94a1157e7768d03a0dc2929?r=use1)
 ## Features
 
 - **Blockchain Indexing**: Real-time and historical data extraction from Avalanche C-Chain
