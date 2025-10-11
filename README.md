@@ -156,4 +156,3 @@ While Palantir shows you the battlefield, Avalytics shows you **who to talk to**
 
 ---
 
-Would you like me to rewrite the **README.md** file itself in production markdown (so you can commit it directly to GitHub), or do you want a **new top-level “AI & Growth Intelligence” section** merged into the existing file?
