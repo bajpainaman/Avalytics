@@ -135,10 +135,10 @@ avalytics cohorts --format json > cohort_map.json
 * **Lead Conversion Pipeline**: Wallets → Cohorts → Leads → CRM
 
 ```
-┌───────────────────────┐     ┌────────────────────┐     ┌────────────────────┐
-│     Avalanche RPC     │────▶│    AI Profiler     │────▶│    CRM Pipeline    │
+┌───────────────────────┐     ┌────────────────────┐     ┌─────────────────────┐
+│     Avalanche RPC     │────▶│    AI Profiler     │────▶│    CRM Pipeline     │
 │  Indexer & Subnets    │     │   (Ollama / LLMs)  │     │ (Monday / Clay / SF)│
-└───────────────────────┘     └────────────────────┘     └────────────────────┘
+└───────────────────────┘     └────────────────────┘     └─────────────────────┘
 
 ```
 
