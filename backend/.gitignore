@@ -1,0 +1,18 @@
+# AvalancheGo data directories
+data/
+db/
+*.db
+*.log
+
+# Binary files
+avalanchego
+avalanchego-*
+
+# Config files with sensitive data
+*.env
+config.local.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
