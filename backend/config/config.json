@@ -1,0 +1,14 @@
+{
+  "network-id": 1,
+  "http-host": "0.0.0.0",
+  "http-port": 9650,
+  "staking-port": 9651,
+  "db-dir": "./data/db",
+  "log-level": "info",
+  "log-display-level": "info",
+  "log-format": "json",
+  "pruning-enabled": false,
+  "state-sync-enabled": false,
+  "chain-config-dir": "./config/chains"
+}
+

@@ -1,0 +1,21 @@
+{
+  "config": {
+    "eth-apis": [
+      "eth",
+      "eth-filter",
+      "net",
+      "web3",
+      "debug",
+      "trace"
+    ],
+    "pruning-enabled": false,
+    "snapshot-async": true,
+    "snapshot-verification-enabled": false,
+    "tx-lookup-limit": 0,
+    "allow-unfinalized-queries": true,
+    "allow-unprotected-txs": true,
+    "remote-tx-gossip-only-enabled": false,
+    "log-level": "info"
+  }
+}
+
