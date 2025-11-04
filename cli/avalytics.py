@@ -215,6 +215,48 @@ def inspect(address, ai, patterns):
 
 
 @cli.command()
+@click.option('--block', '-b', type=int, help='Query specific block number')
+@click.option('--from-block', type=int, help='Start block number')
+@click.option('--to-block', type=int, help='End block number')
+@click.option('--address', '-a', type=str, help='Filter by address')
+@click.option('--format', '-f', type=click.Choice(['table', 'json']), default='table')
+def query(block, from_block, to_block, address, format):
+    """Query blockchain data from Avalanche C-Chain"""
+    from web3 import Web3
+    
+    rpc_url = config.get('rpc_url', 'http://localhost:9650/ext/bc/C/rpc')
+    
+    console.print(f"[dim]Connecting to {rpc_url}...[/dim]")
+    
+    try:
+        w3 = Web3(Web3.HTTPProvider(rpc_url))
+        if not w3.is_connected():
+            console.print(f"[red]Error:[/red] Failed to connect to RPC endpoint")
+            return
+        
+        latest_block = w3.eth.block_number
+        console.print(f"[green]Connected[/green] - Latest block: {latest_block:,}\n")
+        
+        if block:
+            # Query single block
+            console.print(f"[bold]Fetching block {block}...[/bold]")
+            try:
+                block_data = w3.eth.get_block(block, full_transactions=True)
+                console.print(f"  Block #{block_data['number']}")
+                console.print(f"  Timestamp: {block_data['timestamp']}")
+                console.print(f"  Transactions: {len(block_data['transactions'])}")
+                console.print(f"  Gas used: {block_data['gasUsed']:,}")
+            except Exception as e:
+                console.print(f"[red]Error fetching block:[/red] {e}")
+        else:
+            console.print("[yellow]Query functionality coming soon...[/yellow]")
+            console.print("  Use --block to query a specific block")
+            
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+
+
+@cli.command()
 @click.option('--format', '-f', type=click.Choice(['table', 'json']), default='table')
 def cohorts(format):
     """List all wallet cohorts"""
