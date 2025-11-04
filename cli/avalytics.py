@@ -242,15 +242,48 @@ def query(block, from_block, to_block, address, format):
             console.print(f"[bold]Fetching block {block}...[/bold]")
             try:
                 block_data = w3.eth.get_block(block, full_transactions=True)
-                console.print(f"  Block #{block_data['number']}")
-                console.print(f"  Timestamp: {block_data['timestamp']}")
-                console.print(f"  Transactions: {len(block_data['transactions'])}")
-                console.print(f"  Gas used: {block_data['gasUsed']:,}")
+                
+                if format == 'json':
+                    result = {
+                        'block_number': block_data['number'],
+                        'hash': block_data['hash'].hex(),
+                        'timestamp': block_data['timestamp'],
+                        'transaction_count': len(block_data['transactions']),
+                        'gas_used': block_data['gasUsed'],
+                        'gas_limit': block_data['gasLimit']
+                    }
+                    console.print_json(data=result)
+                else:
+                    table = Table(title=f"Block {block}", box=box.MINIMAL)
+                    table.add_column("Field", style="cyan")
+                    table.add_column("Value", style="green")
+                    
+                    table.add_row("Block Number", str(block_data['number']))
+                    table.add_row("Hash", block_data['hash'].hex()[:20] + "...")
+                    table.add_row("Timestamp", str(block_data['timestamp']))
+                    table.add_row("Transactions", str(len(block_data['transactions'])))
+                    table.add_row("Gas Used", f"{block_data['gasUsed']:,}")
+                    table.add_row("Gas Limit", f"{block_data['gasLimit']:,}")
+                    
+                    console.print(table)
+                    
+                    # Show transactions if address filter
+                    if address and block_data['transactions']:
+                        console.print(f"\n[bold]Transactions involving {address}:[/bold]")
+                        matches = [tx for tx in block_data['transactions'] 
+                                 if tx['from'].lower() == address.lower() or 
+                                    (tx['to'] and tx['to'].lower() == address.lower())]
+                        console.print(f"  Found {len(matches)} matching transactions")
+                        
             except Exception as e:
                 console.print(f"[red]Error fetching block:[/red] {e}")
+        elif from_block and to_block:
+            console.print(f"[bold]Querying blocks {from_block} to {to_block}...[/bold]")
+            console.print("[yellow]Block range queries coming soon[/yellow]")
         else:
             console.print("[yellow]Query functionality coming soon...[/yellow]")
             console.print("  Use --block to query a specific block")
+            console.print("  Use --from-block and --to-block for ranges")
             
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
