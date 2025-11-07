@@ -216,11 +216,12 @@ def inspect(address, ai, patterns):
 
 @cli.command()
 @click.option('--block', '-b', type=int, help='Query specific block number')
+@click.option('--tx', '-t', type=str, help='Query transaction by hash')
 @click.option('--from-block', type=int, help='Start block number')
 @click.option('--to-block', type=int, help='End block number')
 @click.option('--address', '-a', type=str, help='Filter by address')
 @click.option('--format', '-f', type=click.Choice(['table', 'json']), default='table')
-def query(block, from_block, to_block, address, format):
+def query(block, tx, from_block, to_block, address, format):
     """Query blockchain data from Avalanche C-Chain"""
     from web3 import Web3
     
@@ -277,6 +278,41 @@ def query(block, from_block, to_block, address, format):
                         
             except Exception as e:
                 console.print(f"[red]Error fetching block:[/red] {e}")
+        elif tx:
+            # Query transaction
+            console.print(f"[bold]Fetching transaction {tx}...[/bold]")
+            try:
+                tx_data = w3.eth.get_transaction(tx)
+                receipt = w3.eth.get_transaction_receipt(tx)
+                
+                if format == 'json':
+                    result = {
+                        'hash': tx_data['hash'].hex(),
+                        'block_number': tx_data['blockNumber'],
+                        'from': tx_data['from'],
+                        'to': tx_data['to'],
+                        'value': str(tx_data['value']),
+                        'gas_price': str(tx_data['gasPrice']),
+                        'gas_used': receipt['gasUsed'],
+                        'status': 'success' if receipt['status'] == 1 else 'failed'
+                    }
+                    console.print_json(data=result)
+                else:
+                    table = Table(title=f"Transaction {tx[:20]}...", box=box.MINIMAL)
+                    table.add_column("Field", style="cyan")
+                    table.add_column("Value", style="green")
+                    
+                    table.add_row("Hash", tx_data['hash'].hex())
+                    table.add_row("Block", str(tx_data['blockNumber']))
+                    table.add_row("From", tx_data['from'])
+                    table.add_row("To", tx_data['to'] or "Contract Creation")
+                    table.add_row("Value", f"{tx_data['value'] / 10**18:.6f} AVAX")
+                    table.add_row("Gas Used", f"{receipt['gasUsed']:,}")
+                    table.add_row("Status", "✅ Success" if receipt['status'] == 1 else "❌ Failed")
+                    
+                    console.print(table)
+            except Exception as e:
+                console.print(f"[red]Error fetching transaction:[/red] {e}")
         elif from_block and to_block:
             console.print(f"[bold]Querying blocks {from_block} to {to_block}...[/bold]")
             console.print("[yellow]Block range queries coming soon[/yellow]")
