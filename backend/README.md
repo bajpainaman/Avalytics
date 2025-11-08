@@ -47,6 +47,9 @@ cd backend
 # In another terminal, check status
 ./scripts/status.sh
 
+# Test connection
+./scripts/test_connection.sh
+
 # Stop the node
 ./scripts/stop.sh
 ```
