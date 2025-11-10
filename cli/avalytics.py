@@ -314,8 +314,67 @@ def query(block, tx, from_block, to_block, address, format):
             except Exception as e:
                 console.print(f"[red]Error fetching transaction:[/red] {e}")
         elif from_block and to_block:
-            console.print(f"[bold]Querying blocks {from_block} to {to_block}...[/bold]")
-            console.print("[yellow]Block range queries coming soon[/yellow]")
+            # Query block range
+            console.print(f"[bold]Querying blocks {from_block:,} to {to_block:,}...[/bold]")
+            
+            if to_block - from_block > 1000:
+                console.print("[yellow]Warning: Large range, this may take a while...[/yellow]")
+            
+            try:
+                blocks_data = []
+                total_txs = 0
+                total_gas = 0
+                
+                # Sample blocks for large ranges
+                step = max(1, (to_block - from_block) // 100) if (to_block - from_block) > 100 else 1
+                
+                with Progress() as progress:
+                    task = progress.add_task("[cyan]Fetching blocks...", total=min(100, to_block - from_block + 1))
+                    
+                    for block_num in range(from_block, min(to_block + 1, from_block + 100)):
+                        try:
+                            block_data = w3.eth.get_block(block_num, full_transactions=False)
+                            blocks_data.append({
+                                'number': block_data['number'],
+                                'tx_count': len(block_data['transactions']),
+                                'gas_used': block_data['gasUsed'],
+                                'timestamp': block_data['timestamp']
+                            })
+                            total_txs += len(block_data['transactions'])
+                            total_gas += block_data['gasUsed']
+                            progress.update(task, advance=1)
+                        except Exception as e:
+                            console.print(f"[red]Error fetching block {block_num}:[/red] {e}")
+                            break
+                
+                if format == 'json':
+                    result = {
+                        'from_block': from_block,
+                        'to_block': to_block,
+                        'blocks_queried': len(blocks_data),
+                        'total_transactions': total_txs,
+                        'total_gas_used': total_gas,
+                        'blocks': blocks_data
+                    }
+                    console.print_json(data=result)
+                else:
+                    table = Table(title=f"Block Range {from_block:,} - {to_block:,}", box=box.MINIMAL)
+                    table.add_column("Metric", style="cyan")
+                    table.add_column("Value", style="green", justify="right")
+                    
+                    table.add_row("Blocks Queried", f"{len(blocks_data):,}")
+                    table.add_row("Total Transactions", f"{total_txs:,}")
+                    table.add_row("Total Gas Used", f"{total_gas:,}")
+                    if len(blocks_data) > 0:
+                        avg_txs = total_txs / len(blocks_data)
+                        avg_gas = total_gas / len(blocks_data)
+                        table.add_row("Avg Txs per Block", f"{avg_txs:.1f}")
+                        table.add_row("Avg Gas per Block", f"{avg_gas:,.0f}")
+                    
+                    console.print(table)
+                    
+            except Exception as e:
+                console.print(f"[red]Error querying block range:[/red] {e}")
         else:
             console.print("[yellow]Query functionality coming soon...[/yellow]")
             console.print("  Use --block to query a specific block")
