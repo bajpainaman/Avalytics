@@ -327,20 +327,41 @@ def query(block, tx, from_block, to_block, address, format):
                 
                 # Sample blocks for large ranges
                 step = max(1, (to_block - from_block) // 100) if (to_block - from_block) > 100 else 1
+                max_blocks = min(100, to_block - from_block + 1)
+                
+                matching_txs = []
                 
                 with Progress() as progress:
-                    task = progress.add_task("[cyan]Fetching blocks...", total=min(100, to_block - from_block + 1))
+                    task = progress.add_task("[cyan]Fetching blocks...", total=max_blocks)
                     
-                    for block_num in range(from_block, min(to_block + 1, from_block + 100)):
+                    for block_num in range(from_block, min(to_block + 1, from_block + max_blocks)):
                         try:
-                            block_data = w3.eth.get_block(block_num, full_transactions=False)
+                            # Fetch full transactions if address filter is set
+                            full_txs = address is not None
+                            block_data = w3.eth.get_block(block_num, full_transactions=full_txs)
+                            
+                            block_tx_count = len(block_data['transactions'])
+                            
+                            # Filter by address if specified
+                            if address and full_txs:
+                                for tx in block_data['transactions']:
+                                    if (tx['from'].lower() == address.lower() or 
+                                        (tx['to'] and tx['to'].lower() == address.lower())):
+                                        matching_txs.append({
+                                            'hash': tx['hash'].hex(),
+                                            'block': block_num,
+                                            'from': tx['from'],
+                                            'to': tx['to'],
+                                            'value': int(tx['value'])
+                                        })
+                            
                             blocks_data.append({
                                 'number': block_data['number'],
-                                'tx_count': len(block_data['transactions']),
+                                'tx_count': block_tx_count,
                                 'gas_used': block_data['gasUsed'],
                                 'timestamp': block_data['timestamp']
                             })
-                            total_txs += len(block_data['transactions'])
+                            total_txs += block_tx_count
                             total_gas += block_data['gasUsed']
                             progress.update(task, advance=1)
                         except Exception as e:
@@ -372,6 +393,30 @@ def query(block, tx, from_block, to_block, address, format):
                         table.add_row("Avg Gas per Block", f"{avg_gas:,.0f}")
                     
                     console.print(table)
+                    
+                    # Show matching transactions if address filter was used
+                    if address and matching_txs:
+                        console.print(f"\n[bold]Found {len(matching_txs)} transactions for {address}:[/bold]")
+                        tx_table = Table(box=box.MINIMAL)
+                        tx_table.add_column("Hash", style="cyan", no_wrap=False)
+                        tx_table.add_column("Block", justify="right")
+                        tx_table.add_column("From", style="yellow")
+                        tx_table.add_column("To", style="yellow")
+                        tx_table.add_column("Value (AVAX)", justify="right", style="green")
+                        
+                        for tx in matching_txs[:20]:  # Limit to 20 for display
+                            tx_table.add_row(
+                                tx['hash'][:16] + "...",
+                                str(tx['block']),
+                                tx['from'][:10] + "...",
+                                (tx['to'][:10] + "..." if tx['to'] else "Contract"),
+                                f"{tx['value'] / 10**18:.6f}"
+                            )
+                        
+                        if len(matching_txs) > 20:
+                            console.print(f"[dim]... and {len(matching_txs) - 20} more[/dim]")
+                        
+                        console.print(tx_table)
                     
             except Exception as e:
                 console.print(f"[red]Error querying block range:[/red] {e}")
