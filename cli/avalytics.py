@@ -430,6 +430,99 @@ def query(block, tx, from_block, to_block, address, format):
 
 
 @cli.command()
+@click.option('--blocks', '-n', default=100, help='Number of recent blocks to analyze')
+@click.option('--format', '-f', type=click.Choice(['table', 'json']), default='table')
+def chain_stats(blocks, format):
+    """Show chain performance statistics (TPS, gas, volume)"""
+    from web3 import Web3
+    
+    rpc_url = config.get('rpc_url', 'http://localhost:9650/ext/bc/C/rpc')
+    
+    try:
+        w3 = Web3(Web3.HTTPProvider(rpc_url))
+        if not w3.is_connected():
+            console.print(f"[red]Error:[/red] Failed to connect to RPC endpoint")
+            return
+        
+        latest_block = w3.eth.block_number
+        start_block = max(0, latest_block - blocks)
+        
+        console.print(f"[dim]Analyzing blocks {start_block:,} to {latest_block:,}...[/dim]\n")
+        
+        total_txs = 0
+        total_gas = 0
+        total_volume = 0
+        block_times = []
+        prev_timestamp = None
+        
+        with Progress() as progress:
+            task = progress.add_task("[cyan]Fetching blocks...", total=blocks)
+            
+            for block_num in range(start_block, latest_block + 1):
+                try:
+                    block = w3.eth.get_block(block_num, full_transactions=True)
+                    total_txs += len(block['transactions'])
+                    total_gas += block['gasUsed']
+                    
+                    # Calculate volume from transactions
+                    for tx in block['transactions']:
+                        total_volume += int(tx['value'])
+                    
+                    # Calculate block time
+                    if prev_timestamp:
+                        block_time = block['timestamp'] - prev_timestamp
+                        block_times.append(block_time)
+                    prev_timestamp = block['timestamp']
+                    
+                    progress.update(task, advance=1)
+                except Exception as e:
+                    break
+        
+        if len(block_times) == 0:
+            console.print("[red]Error:[/red] Could not fetch enough blocks")
+            return
+        
+        # Calculate metrics
+        blocks_analyzed = latest_block - start_block + 1
+        avg_block_time = sum(block_times) / len(block_times) if block_times else 0
+        tps = total_txs / (avg_block_time * blocks_analyzed) if avg_block_time > 0 else 0
+        avg_gas_per_block = total_gas / blocks_analyzed
+        avg_txs_per_block = total_txs / blocks_analyzed
+        
+        if format == 'json':
+            result = {
+                'blocks_analyzed': blocks_analyzed,
+                'total_transactions': total_txs,
+                'total_gas_used': total_gas,
+                'total_volume_avax': total_volume / 10**18,
+                'avg_block_time_seconds': avg_block_time,
+                'transactions_per_second': tps,
+                'avg_gas_per_block': avg_gas_per_block,
+                'avg_txs_per_block': avg_txs_per_block
+            }
+            console.print_json(data=result)
+        else:
+            table = Table(title="Chain Performance Statistics", box=box.MINIMAL_DOUBLE_HEAD)
+            table.add_column("Metric", style="cyan")
+            table.add_column("Value", style="green", justify="right")
+            
+            table.add_row("Blocks Analyzed", f"{blocks_analyzed:,}")
+            table.add_row("Total Transactions", f"{total_txs:,}")
+            table.add_row("Total Volume", f"{total_volume / 10**18:,.2f} AVAX")
+            table.add_row("Total Gas Used", f"{total_gas:,}")
+            table.add_row("", "")
+            table.add_row("Avg Block Time", f"{avg_block_time:.2f} seconds")
+            table.add_row("Transactions/Second", f"{tps:.2f}")
+            table.add_row("Avg Txs per Block", f"{avg_txs_per_block:.1f}")
+            table.add_row("Avg Gas per Block", f"{avg_gas_per_block:,.0f}")
+            
+            console.print(table)
+            
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+
+
+@cli.command()
 @click.option('--format', '-f', type=click.Choice(['table', 'json']), default='table')
 def cohorts(format):
     """List all wallet cohorts"""
