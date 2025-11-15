@@ -319,7 +319,7 @@ def query(block, tx, from_block, to_block, address, format):
             console.print(f"[bold]Querying blocks {from_block:,} to {to_block:,}...[/bold]")
             
             if to_block - from_block > 1000:
-                console.print("[yellow]Warning: Large range, this may take a while...[/yellow]")
+                console.print("[yellow]Warning:[/yellow] Large range (>1000 blocks), this may take a while...")
             
             try:
                 blocks_data = []
