@@ -16,6 +16,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 import json
 from typing import Optional
 from ai.structured_analyzer import StructuredAnalyzer
+from cli.dashboard import Dashboard
 
 console = Console()
 
@@ -483,11 +484,12 @@ def chain_stats(blocks, format):
             return
         
         # Calculate metrics
-        blocks_analyzed = latest_block - start_block + 1
+        blocks_analyzed = len(block_times) + 1 if block_times else 1
         avg_block_time = sum(block_times) / len(block_times) if block_times else 0
-        tps = total_txs / (avg_block_time * blocks_analyzed) if avg_block_time > 0 else 0
-        avg_gas_per_block = total_gas / blocks_analyzed
-        avg_txs_per_block = total_txs / blocks_analyzed
+        total_time = avg_block_time * blocks_analyzed if avg_block_time > 0 else 1
+        tps = total_txs / total_time if total_time > 0 else 0
+        avg_gas_per_block = total_gas / blocks_analyzed if blocks_analyzed > 0 else 0
+        avg_txs_per_block = total_txs / blocks_analyzed if blocks_analyzed > 0 else 0
         
         if format == 'json':
             result = {
@@ -520,6 +522,21 @@ def chain_stats(blocks, format):
             
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
+
+
+@cli.command()
+def dashboard():
+    """Launch interactive analytics dashboard"""
+    db_path = config.get('db_path', './data/avalytics.db')
+    
+    try:
+        dashboard = Dashboard(db_path)
+        dashboard.interactive_mode()
+    except FileNotFoundError:
+        console.print(f"[red]Error:[/red] Database not found at {db_path}")
+        console.print("[yellow]Hint:[/yellow] Run the indexer first to populate the database")
+    except Exception as e:
+        console.print(f"[red]Error launching dashboard:[/red] {e}")
 
 
 @cli.command()
