@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 import sqlite3
+import os
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -15,6 +16,7 @@ from rich.layout import Layout
 from rich.prompt import Prompt
 from rich import box
 from ai.structured_analyzer import StructuredAnalyzer
+from web3 import Web3
 import json
 
 
@@ -214,6 +216,72 @@ class Dashboard:
 
         self.console.print(table)
 
+    def show_chain_stats(self):
+        """Show chain performance statistics"""
+        from web3 import Web3
+        
+        rpc_url = os.getenv("RPC_URL", "http://localhost:9650/ext/bc/C/rpc")
+        
+        try:
+            w3 = Web3(Web3.HTTPProvider(rpc_url))
+            if not w3.is_connected():
+                self.console.print("[red]Error:[/red] Could not connect to RPC endpoint")
+                return
+            
+            latest_block = w3.eth.block_number
+            blocks_to_check = 100
+            start_block = max(0, latest_block - blocks_to_check)
+            
+            self.console.print(f"\n[bold]Chain Performance (last {blocks_to_check} blocks)[/bold]\n")
+            
+            total_txs = 0
+            total_gas = 0
+            block_times = []
+            prev_timestamp = None
+            
+            with self.console.status("[cyan]Fetching block data..."):
+                for block_num in range(start_block, latest_block + 1):
+                    try:
+                        block = w3.eth.get_block(block_num, full_transactions=False)
+                        total_txs += len(block['transactions'])
+                        total_gas += block['gasUsed']
+                        
+                        if prev_timestamp:
+                            block_times.append(block['timestamp'] - prev_timestamp)
+                        prev_timestamp = block['timestamp']
+                    except:
+                        break
+            
+            if len(block_times) == 0:
+                self.console.print("[red]Error:[/red] Could not fetch block data")
+                return
+            
+            avg_block_time = sum(block_times) / len(block_times)
+            tps = total_txs / (avg_block_time * blocks_to_check) if avg_block_time > 0 else 0
+            avg_txs_per_block = total_txs / blocks_to_check
+            avg_gas_per_block = total_gas / blocks_to_check
+            
+            table = Table(title="Chain Performance", box=box.ROUNDED)
+            table.add_column("Metric", style="cyan")
+            table.add_column("Value", style="green", justify="right")
+            
+            table.add_row("Latest Block", f"{latest_block:,}")
+            table.add_row("Blocks Analyzed", f"{blocks_to_check:,}")
+            table.add_row("", "")
+            table.add_row("Total Transactions", f"{total_txs:,}")
+            table.add_row("Avg Txs per Block", f"{avg_txs_per_block:.1f}")
+            table.add_row("Transactions/Second", f"{tps:.2f}")
+            table.add_row("", "")
+            table.add_row("Total Gas Used", f"{total_gas:,}")
+            table.add_row("Avg Gas per Block", f"{avg_gas_per_block:,.0f}")
+            table.add_row("Avg Block Time", f"{avg_block_time:.2f} seconds")
+            
+            self.console.print(table)
+            self.console.print()
+            
+        except Exception as e:
+            self.console.print(f"[red]Error:[/red] {e}")
+
     def interactive_mode(self):
         """Interactive dashboard mode"""
         self.console.clear()
@@ -230,9 +298,10 @@ class Dashboard:
             self.console.print("  3. wallet       - Deep wallet analysis")
             self.console.print("  4. cohorts      - View all cohorts")
             self.console.print("  5. cohort       - Deep cohort analysis")
-            self.console.print("  6. quit         - Exit\n")
+            self.console.print("  6. chain        - Chain performance stats")
+            self.console.print("  7. quit         - Exit\n")
 
-            cmd = Prompt.ask("Select command", choices=["1", "2", "3", "4", "5", "6"])
+            cmd = Prompt.ask("Select command", choices=["1", "2", "3", "4", "5", "6", "7"])
 
             if cmd == "1":
                 self.show_overview()
@@ -248,6 +317,8 @@ class Dashboard:
                 cohort = int(Prompt.ask("Enter cohort ID"))
                 self.analyze_cohort_deep(cohort)
             elif cmd == "6":
+                self.show_chain_stats()
+            elif cmd == "7":
                 self.console.print("[yellow]Goodbye![/yellow]")
                 break
 
