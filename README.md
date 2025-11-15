@@ -67,7 +67,11 @@ Each wallet receives:
 ## 🧰 CLI + Automation: “The Foundry of Intelligence”
 
 ```
-avalytics query avax whales --days 30 --ai --cluster
+avalytics query --block 12345
+avalytics query --from-block 10000 --to-block 10100 --address 0x...
+avalytics query --tx 0xabc123...
+avalytics chain-stats --blocks 200
+avalytics dashboard
 avalytics analyze 0x7a4b... --patterns --lead
 avalytics research 0x7a4b... --grok --perplexity
 avalytics crm sync monday --limit 50 --qualified
@@ -75,7 +79,9 @@ avalytics crm sync monday --limit 50 --qualified
 
 **Command categories:**
 
-* `query`: blockchain data extraction
+* `query`: blockchain data extraction (blocks, transactions, ranges)
+* `chain-stats`: chain performance statistics (TPS, gas, volume)
+* `dashboard`: interactive analytics dashboard
 * `analyze`: wallet AI profiling
 * `research`: cross-entity intelligence
 * `cohort`: ML segmentation
