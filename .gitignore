@@ -44,3 +44,14 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Dashboard
+dashboard/node_modules/
+dashboard/.next/
+dashboard/.env*.local
+
+# Assets (screenshots)
+assets/
+
+# Checkpoints
+*_checkpoint.json

@@ -38,3 +38,4 @@ exec "$BIN_DIR/avalanchego" \
     --state-sync-enabled=false \
     --chain-config-dir="$CONFIG_DIR/chains"
 
+

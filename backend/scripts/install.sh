@@ -55,3 +55,4 @@ echo ""
 echo "To start the node, run:"
 echo "  ./scripts/start.sh"
 
+

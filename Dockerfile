@@ -6,6 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install
@@ -21,7 +22,12 @@ RUN mkdir -p data logs
 # Initialize database
 RUN python db/init.py
 
-# Expose port if needed
+# Expose API port
 EXPOSE 8000
 
-CMD ["python", "cli/terminal.py"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run API server
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

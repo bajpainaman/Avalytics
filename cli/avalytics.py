@@ -225,6 +225,7 @@ def inspect(address, ai, patterns):
 def query(block, tx, from_block, to_block, address, format):
     """Query blockchain data from Avalanche C-Chain"""
     from web3 import Web3
+    from web3.middleware import geth_poa_middleware
     
     rpc_url = config.get('rpc_url', 'http://localhost:9650/ext/bc/C/rpc')
     
@@ -232,6 +233,8 @@ def query(block, tx, from_block, to_block, address, format):
     
     try:
         w3 = Web3(Web3.HTTPProvider(rpc_url))
+        # Add POA middleware for Avalanche C-Chain
+        w3.middleware_onion.inject(geth_poa_middleware, layer=0)
         if not w3.is_connected():
             console.print(f"[red]Error:[/red] Failed to connect to RPC endpoint")
             return
@@ -436,11 +439,14 @@ def query(block, tx, from_block, to_block, address, format):
 def chain_stats(blocks, format):
     """Show chain performance statistics (TPS, gas, volume)"""
     from web3 import Web3
+    from web3.middleware import geth_poa_middleware
     
     rpc_url = config.get('rpc_url', 'http://localhost:9650/ext/bc/C/rpc')
     
     try:
         w3 = Web3(Web3.HTTPProvider(rpc_url))
+        # Add POA middleware for Avalanche C-Chain
+        w3.middleware_onion.inject(geth_poa_middleware, layer=0)
         if not w3.is_connected():
             console.print(f"[red]Error:[/red] Failed to connect to RPC endpoint")
             return
@@ -556,7 +562,6 @@ def cohorts(format):
             SUM(wp.is_whale) as whales
         FROM wallet_tags wt
         JOIN wallet_profiles wp ON wt.wallet_address = wp.wallet_address
-        WHERE wt.tag LIKE 'cluster_%'
         GROUP BY wt.tag
         ORDER BY wallet_count DESC
     ''')
@@ -567,13 +572,12 @@ def cohorts(format):
     if format == 'json':
         data = []
         for row in results:
-            cohort_id = row[0].replace('cluster_', '')
             data.append({
-                'cohort_id': cohort_id,
+                'cohort_name': row[0],
                 'wallets': row[1],
-                'avg_volume_avax': row[2] / 10**18,
-                'avg_txs': row[3],
-                'whales': row[4]
+                'avg_volume_avax': row[2] / 10**18 if row[2] else 0,
+                'avg_txs': row[3] if row[3] else 0,
+                'whales': row[4] if row[4] else 0
             })
         console.print_json(data=data)
     else:
@@ -585,13 +589,12 @@ def cohorts(format):
         table.add_column("Whales", justify="right", style="yellow")
 
         for row in results:
-            cohort_id = row[0].replace('cluster_', '')
             table.add_row(
-                f"Cohort {cohort_id}",
+                row[0].replace('_', ' ').title(),
                 f"{row[1]:,}",
-                f"{row[2]/10**18:,.2f}",
-                f"{row[3]:.1f}",
-                str(row[4])
+                f"{row[2]/10**18:,.2f}" if row[2] else "0.00",
+                f"{row[3]:.1f}" if row[3] else "0.0",
+                str(row[4] or 0)
             )
 
         console.print(table)

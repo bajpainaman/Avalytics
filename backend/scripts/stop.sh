@@ -20,3 +20,4 @@ else
     echo "ℹ️  No running AvalancheGo process found"
 fi
 
+

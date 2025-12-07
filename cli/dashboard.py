@@ -191,7 +191,6 @@ class Dashboard:
                 AVG(wp.total_txs) as avg_txs
             FROM wallet_tags wt
             JOIN wallet_profiles wp ON wt.wallet_address = wp.wallet_address
-            WHERE wt.tag LIKE 'cluster_%'
             GROUP BY wt.tag
             ORDER BY wallet_count DESC
         ''')
@@ -206,12 +205,11 @@ class Dashboard:
         table.add_column("Avg Txs", justify="right")
 
         for tag, count, avg_vol, avg_txs in cohorts:
-            cohort_id = tag.replace('cluster_', '')
             table.add_row(
-                f"Cohort {cohort_id}",
+                tag.replace('_', ' ').title(),
                 f"{count:,}",
-                f"{avg_vol/10**18:,.2f}",
-                f"{avg_txs:.1f}"
+                f"{avg_vol/10**18:,.2f}" if avg_vol else "0.00",
+                f"{avg_txs:.1f}" if avg_txs else "0.0"
             )
 
         self.console.print(table)
@@ -219,11 +217,14 @@ class Dashboard:
     def show_chain_stats(self):
         """Show chain performance statistics"""
         from web3 import Web3
+        from web3.middleware import geth_poa_middleware
         
         rpc_url = os.getenv("RPC_URL", "http://localhost:9650/ext/bc/C/rpc")
         
         try:
             w3 = Web3(Web3.HTTPProvider(rpc_url))
+            # Add POA middleware for Avalanche C-Chain
+            w3.middleware_onion.inject(geth_poa_middleware, layer=0)
             if not w3.is_connected():
                 self.console.print("[red]Error:[/red] Could not connect to RPC endpoint")
                 return
