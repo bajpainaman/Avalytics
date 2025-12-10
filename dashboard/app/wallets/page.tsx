@@ -54,7 +54,6 @@ interface WalletsResponse {
   limit: number;
 }
 
-// Fetch function for infinite query
 async function fetchWallets(
   page: number,
   limit: number,
@@ -104,6 +103,8 @@ export default function WalletsPage() {
       return undefined;
     },
     initialPageParam: 1,
+    staleTime: 5 * 60 * 1000, // 5 min cache
+    gcTime: 30 * 60 * 1000, // Keep in cache 30 min
   });
 
   const { data: walletDetail } = useQuery({
@@ -118,7 +119,6 @@ export default function WalletsPage() {
     enabled: !!selectedWallet,
   });
 
-  // Intersection Observer for infinite scroll
   const handleObserver = useCallback(
     (entries: IntersectionObserverEntry[]) => {
       const [entry] = entries;
@@ -155,11 +155,9 @@ export default function WalletsPage() {
     }));
   };
 
-  // Flatten all pages into single array
   const allWallets = data?.pages.flatMap((page) => page.wallets) || [];
   const totalWallets = data?.pages[0]?.total || 0;
 
-  // Filter by search
   const filteredWallets = allWallets.filter((w) =>
     search ? w.wallet_address?.toLowerCase().includes(search.toLowerCase()) : true
   );
@@ -192,76 +190,78 @@ export default function WalletsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Wallet Explorer</h1>
-          <p className="text-slate-400 mt-1">
+          <h1 className="text-2xl font-semibold tracking-tight">Wallet Explorer</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
             {totalWallets.toLocaleString()} wallets tracked • Showing {filteredWallets.length.toLocaleString()}
           </p>
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
+            size="sm"
             onClick={() => refetch()}
-            className="border-slate-700 hover:bg-slate-800"
+            className="h-8 text-xs"
           >
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <RefreshCw className="h-3 w-3 mr-1.5" />
             Refresh
           </Button>
           <Button
             variant="outline"
+            size="sm"
             onClick={exportCSV}
             disabled={!allWallets.length}
-            className="border-slate-700 hover:bg-slate-800"
+            className="h-8 text-xs"
           >
-            <Download className="h-4 w-4 mr-2" />
-            Export CSV ({allWallets.length})
+            <Download className="h-3 w-3 mr-1.5" />
+            Export ({allWallets.length})
           </Button>
         </div>
       </div>
 
       {/* Filters */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardContent className="p-4">
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by address..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 bg-slate-800 border-slate-700"
+                className="pl-9 h-9 bg-secondary/50"
               />
             </div>
             <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-slate-500" />
+              <Filter className="h-4 w-4 text-muted-foreground" />
               <Button
                 variant={filters.whale ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => toggleFilter('whale')}
-                className={filters.whale ? 'bg-blue-600' : 'border-slate-700'}
+                className={`h-8 text-xs ${filters.whale ? 'bg-primary' : ''}`}
               >
-                <Fish className="h-4 w-4 mr-1" />
+                <Fish className="h-3 w-3 mr-1.5" />
                 Whales
               </Button>
               <Button
                 variant={filters.bot ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => toggleFilter('bot')}
-                className={filters.bot ? 'bg-purple-600' : 'border-slate-700'}
+                className={`h-8 text-xs ${filters.bot ? 'bg-primary' : ''}`}
               >
-                <Bot className="h-4 w-4 mr-1" />
+                <Bot className="h-3 w-3 mr-1.5" />
                 Bots
               </Button>
               <Button
                 variant={filters.dex_user ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => toggleFilter('dex_user')}
-                className={filters.dex_user ? 'bg-green-600' : 'border-slate-700'}
+                className={`h-8 text-xs ${filters.dex_user ? 'bg-primary' : ''}`}
               >
-                <ArrowRightLeft className="h-4 w-4 mr-1" />
+                <ArrowRightLeft className="h-3 w-3 mr-1.5" />
                 DEX Users
               </Button>
             </div>
@@ -270,36 +270,58 @@ export default function WalletsPage() {
       </Card>
 
       {/* Table */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card>
         <CardContent className="p-0">
           <div className="max-h-[600px] overflow-y-auto">
             <Table>
-              <TableHeader className="sticky top-0 bg-slate-900 z-10">
-                <TableRow className="border-slate-800 hover:bg-transparent">
-                  <TableHead className="text-slate-400">Address</TableHead>
-                  <TableHead className="text-slate-400 text-right">Transactions</TableHead>
-                  <TableHead className="text-slate-400 text-right">Volume (AVAX)</TableHead>
-                  <TableHead className="text-slate-400">Labels</TableHead>
-                  <TableHead className="text-slate-400">First Seen</TableHead>
+              <TableHeader className="sticky top-0 bg-card z-10">
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Address</TableHead>
+                  <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wide text-right">Transactions</TableHead>
+                  <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wide text-right">Volume (AVAX)</TableHead>
+                  <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Labels</TableHead>
+                  <TableHead className="text-xs font-medium text-muted-foreground uppercase tracking-wide">First Seen</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {isLoading && !data ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8">
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-orange-400" />
-                      <p className="text-slate-400 mt-2">Loading wallets...</p>
+                    <TableCell colSpan={5} className="h-96">
+                      <div className="flex flex-col items-center justify-center h-full gap-6">
+                        {/* Animated Line Loader */}
+                        <svg width="120" height="40" viewBox="0 0 120 40" className="overflow-visible">
+                          <path
+                            d="M10 20 Q30 5, 50 20 T90 20 T110 20"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            className="text-foreground/20"
+                          />
+                          <path
+                            d="M10 20 Q30 5, 50 20 T90 20 T110 20"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            className="text-foreground animate-dash"
+                          />
+                        </svg>
+                        <div className="text-center">
+                          <p className="text-sm text-muted-foreground">Loading wallets</p>
+                          <p className="text-xs text-muted-foreground/60 mt-1">Fetching on-chain data...</p>
+                        </div>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : isError ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-red-400">
+                    <TableCell colSpan={5} className="text-center py-12 text-destructive">
                       Failed to load wallets. Check API connection.
                     </TableCell>
                   </TableRow>
                 ) : filteredWallets.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-slate-500">
+                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                       No wallets found
                     </TableCell>
                   </TableRow>
@@ -307,34 +329,34 @@ export default function WalletsPage() {
                   filteredWallets.map((wallet) => (
                     <TableRow
                       key={wallet.wallet_address}
-                      className="border-slate-800 hover:bg-slate-800/50 cursor-pointer"
+                      className="border-border hover:bg-secondary/50 cursor-pointer"
                       onClick={() => setSelectedWallet(wallet.wallet_address)}
                     >
-                      <TableCell className="font-mono text-sm">
+                      <TableCell className="font-mono text-xs">
                         {wallet.wallet_address ? `${wallet.wallet_address.slice(0, 10)}...${wallet.wallet_address.slice(-6)}` : 'N/A'}
                       </TableCell>
-                      <TableCell className="text-right">{(wallet.total_txs || 0).toLocaleString()}</TableCell>
-                      <TableCell className="text-right">{(wallet.volume_avax || 0).toFixed(4)}</TableCell>
+                      <TableCell className="text-right text-sm">{(wallet.total_txs || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right text-sm">{(wallet.volume_avax || 0).toFixed(4)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           {wallet.is_whale && (
-                            <Badge variant="outline" className="border-blue-500/50 text-blue-400 text-xs">
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 text-blue-400">
                               Whale
                             </Badge>
                           )}
                           {wallet.is_bot && (
-                            <Badge variant="outline" className="border-purple-500/50 text-purple-400 text-xs">
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 text-purple-400">
                               Bot
                             </Badge>
                           )}
                           {wallet.is_dex_user && (
-                            <Badge variant="outline" className="border-green-500/50 text-green-400 text-xs">
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 text-green-400">
                               DEX
                             </Badge>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-slate-400 text-sm">
+                      <TableCell className="text-muted-foreground text-xs">
                         {wallet.first_seen ? new Date(wallet.first_seen).toLocaleDateString() : 'N/A'}
                       </TableCell>
                     </TableRow>
@@ -345,22 +367,23 @@ export default function WalletsPage() {
           </div>
           
           {/* Infinite Scroll Trigger */}
-          <div ref={loadMoreRef} className="py-4 text-center">
+          <div ref={loadMoreRef} className="py-4 text-center border-t border-border">
             {isFetchingNextPage ? (
               <div className="flex items-center justify-center gap-2">
-                <Loader2 className="h-5 w-5 animate-spin text-orange-400" />
-                <span className="text-slate-400">Loading more wallets...</span>
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <span className="text-muted-foreground text-sm">Loading more...</span>
               </div>
             ) : hasNextPage ? (
               <Button
                 variant="ghost"
+                size="sm"
                 onClick={() => fetchNextPage()}
-                className="text-slate-400 hover:text-white"
+                className="text-muted-foreground text-xs"
               >
                 Load More
               </Button>
             ) : allWallets.length > 0 ? (
-              <p className="text-slate-500 text-sm">All {totalWallets.toLocaleString()} wallets loaded</p>
+              <p className="text-muted-foreground text-xs">All {totalWallets.toLocaleString()} wallets loaded</p>
             ) : null}
           </div>
         </CardContent>
@@ -368,15 +391,15 @@ export default function WalletsPage() {
 
       {/* Wallet Detail Modal */}
       <Dialog open={!!selectedWallet} onOpenChange={() => setSelectedWallet(null)}>
-        <DialogContent className="bg-slate-900 border-slate-800 max-w-2xl">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 text-base font-medium">
               Wallet Details
               <a
                 href={`https://snowtrace.io/address/${selectedWallet}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-orange-400 hover:text-orange-300"
+                className="text-primary hover:text-primary/80"
               >
                 <ExternalLink className="h-4 w-4" />
               </a>
@@ -384,27 +407,27 @@ export default function WalletsPage() {
           </DialogHeader>
           {walletDetail?.wallet ? (
             <div className="space-y-4">
-              <div className="p-3 bg-slate-800 rounded-lg">
-                <p className="font-mono text-sm break-all">{selectedWallet}</p>
+              <div className="p-3 bg-secondary/50 rounded-md">
+                <p className="font-mono text-xs break-all text-muted-foreground">{selectedWallet}</p>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div className="p-3 bg-slate-800/50 rounded-lg">
-                  <p className="text-sm text-slate-400">Transactions</p>
-                  <p className="text-xl font-bold">{walletDetail.wallet.total_txs || 0}</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="p-3 bg-secondary/30 rounded-md">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Transactions</p>
+                  <p className="text-xl font-semibold mt-1">{walletDetail.wallet.total_txs || 0}</p>
                 </div>
-                <div className="p-3 bg-slate-800/50 rounded-lg">
-                  <p className="text-sm text-slate-400">Volume</p>
-                  <p className="text-xl font-bold">{(walletDetail.wallet.volume_avax || 0).toFixed(4)} AVAX</p>
+                <div className="p-3 bg-secondary/30 rounded-md">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Volume</p>
+                  <p className="text-xl font-semibold mt-1">{(walletDetail.wallet.volume_avax || 0).toFixed(4)}</p>
                 </div>
-                <div className="p-3 bg-slate-800/50 rounded-lg">
-                  <p className="text-sm text-slate-400">Labels</p>
-                  <div className="flex gap-1 mt-1">
-                    {walletDetail.wallet.is_whale && <Badge className="bg-blue-600">Whale</Badge>}
-                    {walletDetail.wallet.is_bot && <Badge className="bg-purple-600">Bot</Badge>}
-                    {walletDetail.wallet.is_dex_user && <Badge className="bg-green-600">DEX</Badge>}
+                <div className="p-3 bg-secondary/30 rounded-md">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Labels</p>
+                  <div className="flex gap-1 mt-2">
+                    {walletDetail.wallet.is_whale && <Badge variant="secondary" className="text-blue-400">Whale</Badge>}
+                    {walletDetail.wallet.is_bot && <Badge variant="secondary" className="text-purple-400">Bot</Badge>}
+                    {walletDetail.wallet.is_dex_user && <Badge variant="secondary" className="text-green-400">DEX</Badge>}
                     {!walletDetail.wallet.is_whale && !walletDetail.wallet.is_bot && !walletDetail.wallet.is_dex_user && (
-                      <Badge variant="outline" className="border-slate-600">Normal</Badge>
+                      <Badge variant="secondary">Normal</Badge>
                     )}
                   </div>
                 </div>
@@ -412,14 +435,14 @@ export default function WalletsPage() {
 
               {transactions?.transactions && transactions.transactions.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-medium text-slate-400 mb-2">Recent Transactions</h4>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                  <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Recent Transactions</h4>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
                     {transactions.transactions.slice(0, 5).map((tx, i) => (
-                      <div key={i} className="flex items-center justify-between p-2 bg-slate-800/30 rounded text-sm">
-                        <span className="font-mono text-slate-400">
-                          {tx.hash ? `${tx.hash.slice(0, 10)}...` : 'N/A'}
+                      <div key={i} className="flex items-center justify-between p-2 bg-secondary/20 rounded-md text-xs">
+                        <span className="font-mono text-muted-foreground">
+                          {tx.hash ? `${tx.hash.slice(0, 14)}...` : 'N/A'}
                         </span>
-                        <span>{(parseInt(tx.value || '0') / 1e18).toFixed(4)} AVAX</span>
+                        <span className="font-medium">{(parseInt(tx.value || '0') / 1e18).toFixed(4)} AVAX</span>
                       </div>
                     ))}
                   </div>
@@ -428,7 +451,7 @@ export default function WalletsPage() {
             </div>
           ) : (
             <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin text-orange-400" />
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           )}
         </DialogContent>

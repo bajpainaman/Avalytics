@@ -21,8 +21,16 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from web3 import Web3
-from web3.middleware import geth_poa_middleware
 from dotenv import load_dotenv
+
+# Handle different web3 versions for POA middleware
+try:
+    from web3.middleware import ExtraDataToPOAMiddleware as poa_middleware
+except ImportError:
+    try:
+        from web3.middleware import geth_poa_middleware as poa_middleware
+    except ImportError:
+        poa_middleware = None
 
 load_dotenv()
 
@@ -69,7 +77,8 @@ class ReliableIndexer:
         for i, rpc_url in enumerate(Config.RPC_ENDPOINTS):
             try:
                 w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": 30}))
-                w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+                if poa_middleware:
+                    w3.middleware_onion.inject(poa_middleware, layer=0)
                 if w3.is_connected():
                     self.w3 = w3
                     self.current_rpc_index = i
@@ -86,7 +95,8 @@ class ReliableIndexer:
         rpc_url = Config.RPC_ENDPOINTS[self.current_rpc_index]
         print(f"⟳ Switching to RPC: {rpc_url}")
         self.w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": 30}))
-        self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+        if poa_middleware:
+            self.w3.middleware_onion.inject(poa_middleware, layer=0)
         
     def _init_db(self):
         """Initialize database with indexer tracking table"""

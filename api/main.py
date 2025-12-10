@@ -20,7 +20,15 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import sqlite3
 from web3 import Web3
-from web3.middleware import geth_poa_middleware
+
+# Handle different web3 versions for POA middleware
+try:
+    from web3.middleware import ExtraDataToPOAMiddleware as poa_middleware
+except ImportError:
+    try:
+        from web3.middleware import geth_poa_middleware as poa_middleware
+    except ImportError:
+        poa_middleware = None
 
 from api.models import (
     WalletProfile, WalletListResponse, CohortStats, CohortListResponse,
@@ -32,7 +40,7 @@ from api.models import (
 from dotenv import load_dotenv
 load_dotenv()
 
-DB_PATH = os.getenv("DB_PATH", "./data/avalytics.db")
+DB_PATH = os.getenv("DB_PATH", "./data_demo/avalytics.db")
 RPC_URL = os.getenv("RPC_URL", "https://api.avax.network/ext/bc/C/rpc")
 API_KEYS = set(os.getenv("API_KEYS", "demo-key-123").split(","))
 VERSION = "1.0.0"
@@ -115,7 +123,8 @@ def get_db():
 def get_web3():
     """Get Web3 connection with POA middleware"""
     w3 = Web3(Web3.HTTPProvider(RPC_URL, request_kwargs={"timeout": 30}))
-    w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+    if poa_middleware:
+        w3.middleware_onion.inject(poa_middleware, layer=0)
     if not w3.is_connected():
         raise HTTPException(status_code=503, detail="Cannot connect to Avalanche RPC")
     return w3
@@ -154,7 +163,7 @@ async def health_check():
 
 
 # ============ Platform Stats ============
-@app.get("/api/v1/stats", response_model=PlatformStats, tags=["Analytics"])
+@app.get("/api/v1/stats", tags=["Analytics"])
 async def get_platform_stats(
     api_key: str = Depends(verify_api_key),
     db: sqlite3.Connection = Depends(get_db)
@@ -181,25 +190,30 @@ async def get_platform_stats(
     total_wallets = stats['total_wallets'] or 0
     whale_count = stats['whale_count'] or 0
     
-    return PlatformStats(
-        total_wallets=total_wallets,
-        total_transactions=int(stats['total_txs'] or 0),
-        total_blocks=total_blocks,
-        total_volume_avax=(stats['total_volume'] or 0) / 10**18,
-        whale_count=whale_count,
-        whale_percentage=(whale_count / total_wallets * 100) if total_wallets > 0 else 0,
-        bot_count=int(stats['bot_count'] or 0),
-        dex_user_count=int(stats['dex_user_count'] or 0)
-    )
+    # Return format matching dashboard expectations
+    return {
+        "total_wallets": total_wallets,
+        "total_transactions": int(stats['total_txs'] or 0),
+        "total_blocks": total_blocks,
+        "blocks_indexed": total_blocks,  # Dashboard expects this name
+        "total_volume_avax": (stats['total_volume'] or 0) / 10**18,
+        "whale_count": whale_count,
+        "whale_percentage": (whale_count / total_wallets * 100) if total_wallets > 0 else 0,
+        "bot_count": int(stats['bot_count'] or 0),
+        "dex_user_count": int(stats['dex_user_count'] or 0)
+    }
 
 
 # ============ Wallet Endpoints ============
-@app.get("/api/v1/wallets", response_model=WalletListResponse, tags=["Wallets"])
+@app.get("/api/v1/wallets", tags=["Wallets"])
 async def list_wallets(
     limit: int = Query(20, ge=1, le=100, description="Results per page"),
     page: int = Query(1, ge=1, description="Page number"),
     sort_by: str = Query("volume", enum=["volume", "txs", "contracts"]),
     whale_only: bool = Query(False, description="Filter to whale wallets only"),
+    whale: bool = Query(False, description="Filter to whale wallets"),
+    bot: bool = Query(False, description="Filter to bot wallets"),
+    dex_user: bool = Query(False, description="Filter to DEX users"),
     min_volume: Optional[float] = Query(None, description="Minimum volume in AVAX"),
     api_key: str = Depends(verify_api_key),
     db: sqlite3.Connection = Depends(get_db)
@@ -211,8 +225,14 @@ async def list_wallets(
     where_clauses = ["1=1"]
     params = []
     
-    if whale_only:
+    if whale_only or whale:
         where_clauses.append("is_whale = 1")
+    
+    if bot:
+        where_clauses.append("is_bot = 1")
+    
+    if dex_user:
+        where_clauses.append("is_dex_user = 1")
     
     if min_volume is not None:
         where_clauses.append("CAST(total_volume_wei AS REAL) >= ?")
@@ -244,29 +264,29 @@ async def list_wallets(
     
     wallets = []
     for row in cursor.fetchall():
-        wallet_type = "whale" if row['is_whale'] else ("bot" if row['is_bot'] else ("dex" if row['is_dex_user'] else "retail"))
-        wallets.append(WalletProfile(
-            address=row['wallet_address'],
-            total_txs=row['total_txs'],
-            total_volume_avax=int(row['total_volume_wei'] or 0) / 10**18,
-            unique_contracts=row['unique_contracts'] or 0,
-            wallet_type=wallet_type,
-            is_whale=bool(row['is_whale']),
-            is_bot=bool(row['is_bot']),
-            is_dex_user=bool(row['is_dex_user']),
-            first_seen=row['first_seen'],
-            last_active=row['last_active']
-        ))
+        # Return field names matching dashboard expectations
+        # Use float() to handle scientific notation in large numbers
+        wallets.append({
+            "wallet_address": row['wallet_address'],
+            "total_txs": row['total_txs'],
+            "volume_avax": float(row['total_volume_wei'] or 0) / 10**18,
+            "unique_contracts": row['unique_contracts'] or 0,
+            "is_whale": bool(row['is_whale']),
+            "is_bot": bool(row['is_bot']),
+            "is_dex_user": bool(row['is_dex_user']),
+            "first_seen": row['first_seen'],
+            "last_seen": row['last_active']
+        })
     
-    return WalletListResponse(
-        wallets=wallets,
-        total=total,
-        page=page,
-        limit=limit
-    )
+    return {
+        "wallets": wallets,
+        "total": total,
+        "page": page,
+        "limit": limit
+    }
 
 
-@app.get("/api/v1/wallets/{address}", response_model=WalletProfile, tags=["Wallets"])
+@app.get("/api/v1/wallets/{address}", tags=["Wallets"])
 async def get_wallet(
     address: str,
     api_key: str = Depends(verify_api_key),
@@ -286,20 +306,20 @@ async def get_wallet(
     if not row:
         raise HTTPException(status_code=404, detail=f"Wallet {address} not found")
     
-    wallet_type = "whale" if row['is_whale'] else ("bot" if row['is_bot'] else ("dex" if row['is_dex_user'] else "retail"))
-    
-    return WalletProfile(
-        address=row['wallet_address'],
-        total_txs=row['total_txs'],
-        total_volume_avax=int(row['total_volume_wei'] or 0) / 10**18,
-        unique_contracts=row['unique_contracts'] or 0,
-        wallet_type=wallet_type,
-        is_whale=bool(row['is_whale']),
-        is_bot=bool(row['is_bot']),
-        is_dex_user=bool(row['is_dex_user']),
-        first_seen=row['first_seen'],
-        last_active=row['last_active']
-    )
+    # Return format matching dashboard expectations
+    return {
+        "wallet": {
+            "wallet_address": row['wallet_address'],
+            "total_txs": row['total_txs'],
+            "volume_avax": float(row['total_volume_wei'] or 0) / 10**18,
+            "unique_contracts": row['unique_contracts'] or 0,
+            "is_whale": bool(row['is_whale']),
+            "is_bot": bool(row['is_bot']),
+            "is_dex_user": bool(row['is_dex_user']),
+            "first_seen": row['first_seen'],
+            "last_seen": row['last_active']
+        }
+    }
 
 
 @app.get("/api/v1/wallets/{address}/transactions", tags=["Wallets"])
@@ -339,7 +359,7 @@ async def get_wallet_transactions(
 
 
 # ============ Cohort Endpoints ============
-@app.get("/api/v1/cohorts", response_model=CohortListResponse, tags=["Cohorts"])
+@app.get("/api/v1/cohorts", tags=["Cohorts"])
 async def list_cohorts(
     api_key: str = Depends(verify_api_key),
     db: sqlite3.Connection = Depends(get_db)
@@ -362,15 +382,16 @@ async def list_cohorts(
     
     cohorts = []
     for row in cursor.fetchall():
-        cohorts.append(CohortStats(
-            name=row['tag'].replace('_', ' ').title(),
-            wallet_count=row['wallet_count'],
-            avg_volume_avax=(row['avg_volume'] or 0) / 10**18,
-            avg_txs=row['avg_txs'] or 0,
-            whale_count=int(row['whale_count'] or 0)
-        ))
+        # Return format matching dashboard expectations
+        cohorts.append({
+            "cohort_name": row['tag'],  # Dashboard expects cohort_name
+            "wallet_count": row['wallet_count'],
+            "avg_volume_avax": (row['avg_volume'] or 0) / 10**18,
+            "avg_txs": row['avg_txs'] or 0,
+            "whale_count": int(row['whale_count'] or 0)
+        })
     
-    return CohortListResponse(cohorts=cohorts, total=len(cohorts))
+    return {"cohorts": cohorts, "total_cohorts": len(cohorts)}
 
 
 @app.get("/api/v1/cohorts/{cohort_name}/wallets", tags=["Cohorts"])
@@ -383,25 +404,25 @@ async def get_cohort_wallets(
     """Get wallets in a specific cohort"""
     cursor = db.cursor()
     
-    # Convert display name back to tag format
-    tag = cohort_name.lower().replace(' ', '_')
+    # Try exact match first, then try lowercase with underscores
+    tag = cohort_name
     
     cursor.execute('''
         SELECT wp.wallet_address, wp.total_txs, wp.total_volume_wei, 
                wp.is_whale, wp.is_bot, wp.is_dex_user
         FROM wallet_profiles wp
         JOIN wallet_tags wt ON wp.wallet_address = wt.wallet_address
-        WHERE wt.tag = ?
+        WHERE wt.tag = ? OR wt.tag = ?
         ORDER BY CAST(wp.total_volume_wei AS REAL) DESC
         LIMIT ?
-    ''', (tag, limit))
+    ''', (tag, tag.lower().replace(' ', '_'), limit))
     
     wallets = []
     for row in cursor.fetchall():
         wallets.append({
-            "address": row['wallet_address'],
+            "wallet_address": row['wallet_address'],
             "total_txs": row['total_txs'],
-            "volume_avax": int(row['total_volume_wei'] or 0) / 10**18,
+            "volume_avax": float(row['total_volume_wei'] or 0) / 10**18,
             "is_whale": bool(row['is_whale']),
             "is_bot": bool(row['is_bot']),
             "is_dex_user": bool(row['is_dex_user'])
@@ -411,12 +432,41 @@ async def get_cohort_wallets(
 
 
 # ============ Chain Stats Endpoints ============
-@app.get("/api/v1/chain/stats", response_model=ChainStats, tags=["Chain"])
+@app.get("/api/v1/chain/stats", tags=["Chain"])
 async def get_chain_stats(
+    api_key: str = Depends(verify_api_key)
+):
+    """Get real-time chain status - quick endpoint for dashboard"""
+    try:
+        w3 = get_web3()
+        latest_block = w3.eth.block_number
+        gas_price = w3.eth.gas_price
+        
+        # Return format matching dashboard expectations
+        return {
+            "chain_id": 43114,  # Avalanche C-Chain
+            "latest_block": latest_block,
+            "gas_price_gwei": gas_price / 10**9,
+            "synced": True,
+            "rpc_url": RPC_URL
+        }
+    except Exception as e:
+        return {
+            "chain_id": 43114,
+            "latest_block": 0,
+            "gas_price_gwei": 0,
+            "synced": False,
+            "rpc_url": RPC_URL,
+            "error": str(e)
+        }
+
+
+@app.get("/api/v1/chain/performance", tags=["Chain"])
+async def get_chain_performance(
     blocks: int = Query(100, ge=10, le=1000, description="Number of blocks to analyze"),
     api_key: str = Depends(verify_api_key)
 ):
-    """Get real-time chain performance statistics"""
+    """Get detailed chain performance statistics"""
     w3 = get_web3()
     
     latest_block = w3.eth.block_number
@@ -451,16 +501,16 @@ async def get_chain_stats(
     total_time = avg_block_time * blocks_analyzed
     tps = total_txs / total_time if total_time > 0 else 0
     
-    return ChainStats(
-        latest_block=latest_block,
-        blocks_analyzed=blocks_analyzed,
-        total_transactions=total_txs,
-        total_volume_avax=total_volume / 10**18,
-        avg_block_time=avg_block_time,
-        transactions_per_second=tps,
-        avg_txs_per_block=total_txs / blocks_analyzed,
-        avg_gas_per_block=total_gas / blocks_analyzed
-    )
+    return {
+        "latest_block": latest_block,
+        "blocks_analyzed": blocks_analyzed,
+        "total_transactions": total_txs,
+        "total_volume_avax": total_volume / 10**18,
+        "avg_block_time": avg_block_time,
+        "transactions_per_second": tps,
+        "avg_txs_per_block": total_txs / blocks_analyzed,
+        "avg_gas_per_block": total_gas / blocks_analyzed
+    }
 
 
 @app.get("/api/v1/chain/block/{block_number}", response_model=BlockInfo, tags=["Chain"])
@@ -639,7 +689,7 @@ async def get_marketing_targets(
         targets.append({
             "address": row['wallet_address'],
             "total_txs": row['total_txs'],
-            "volume_avax": int(row['total_volume_wei'] or 0) / 10**18,
+            "volume_avax": float(row['total_volume_wei'] or 0) / 10**18,
             "is_whale": bool(row['is_whale']),
             "is_dex_user": bool(row['is_dex_user']),
             "last_active": row['last_active'],
@@ -681,7 +731,7 @@ async def export_wallets(
         wallets.append({
             "address": row['wallet_address'],
             "total_txs": row['total_txs'],
-            "volume_avax": int(row['total_volume_wei'] or 0) / 10**18,
+            "volume_avax": float(row['total_volume_wei'] or 0) / 10**18,
             "unique_contracts": row['unique_contracts'] or 0,
             "is_whale": bool(row['is_whale']),
             "is_bot": bool(row['is_bot']),
@@ -711,8 +761,11 @@ async def export_wallets(
 class ICPRequest(BaseModel):
     """Request model for ICP generation"""
     protocol_name: str
-    protocol_type: str  # defi_lending, dex, nft_marketplace, gamefi, infrastructure, bridge, yield_aggregator
-    description: str
+    protocol_description: str  # Dashboard sends this field name
+    target_audience: Optional[str] = None  # Dashboard sends this field name
+    # Legacy field names for backwards compatibility
+    protocol_type: Optional[str] = None
+    description: Optional[str] = None
     target_market: Optional[str] = None
     competitors: Optional[List[str]] = None
 
@@ -751,33 +804,136 @@ async def generate_icp(
         
         service = OpenAIService(DB_PATH)
         
+        # Handle both dashboard and legacy field names
+        protocol_type = request.protocol_type or "defi"  # Default type
+        description = request.protocol_description or request.description or ""
+        target_market = request.target_audience or request.target_market
+        
         # Generate ICP
         icp = service.generate_icp(
             protocol_name=request.protocol_name,
-            protocol_type=request.protocol_type,
-            description=request.description,
-            target_market=request.target_market,
+            protocol_type=protocol_type,
+            description=description,
+            target_market=target_market,
             competitors=request.competitors
         )
         
         # Find matching wallets
         targets = service.generate_campaign_targets(icp, max_targets=50)
         
+        # Return format matching dashboard expectations
         return {
+            "protocol": request.protocol_name,
             "icp": {
                 "name": icp.name,
                 "description": icp.description,
-                "criteria": icp.criteria.model_dump(),
-                "rationale": icp.rationale,
-                "outreach_strategy": icp.outreach_strategy,
-                "estimated_segment_size": icp.estimated_segment_size
+                "criteria": {
+                    "min_transaction_count": icp.criteria.min_transactions,
+                    "min_volume_usd": icp.criteria.min_volume_avax * 25,  # Rough AVAX to USD
+                    "wallet_age_days": icp.criteria.active_within_days or 30,
+                    "required_behaviors": icp.criteria.behaviors,
+                    "excluded_behaviors": ["bot"] if icp.criteria.exclude_bots else []
+                },
+                "outreach_strategy": icp.outreach_strategy
             },
-            "matching_wallets": targets,
-            "total_matches": len(targets)
+            "matching_wallets": len(targets),
+            "generated_at": datetime.now().isoformat()
         }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ICP generation failed: {str(e)}")
+
+
+class ICPCampaignRequest(BaseModel):
+    """Request for ICP-based campaign post"""
+    protocol_name: str
+    icp_name: str
+    icp_description: str
+    outreach_strategy: str
+    matching_wallets: int
+    required_behaviors: List[str] = []
+    post_type: str = "launch"  # launch, engagement, announcement
+
+
+@app.post("/api/v1/icp/campaign-post", tags=["AI Intelligence"])
+async def generate_icp_campaign_post(
+    request: ICPCampaignRequest,
+    api_key: str = Depends(verify_api_key)
+):
+    """
+    📣 Generate X/Twitter marketing campaign post from ICP
+    
+    Creates targeted social media content based on your generated ICP.
+    Returns ready-to-post content with Twitter intent URL.
+    """
+    try:
+        from openai import OpenAI
+        
+        api_key_openai = os.getenv("OPENAI_APIKEY") or os.getenv("OPENAI_API_KEY")
+        if not api_key_openai:
+            raise HTTPException(status_code=400, detail="OpenAI API key required")
+        
+        client = OpenAI(api_key=api_key_openai)
+        
+        system_prompt = """You are an expert crypto marketing copywriter. Create compelling X/Twitter posts for blockchain protocols.
+
+Rules:
+- Keep under 280 characters for single tweet
+- Use relevant emojis (2-3 max)
+- Include $AVAX or relevant tickers
+- Add 2-3 hashtags
+- Be exciting but not spammy
+- Focus on value proposition
+- Create FOMO or urgency when appropriate
+- NO financial advice"""
+
+        user_prompt = f"""Create a {request.post_type} marketing post for X/Twitter.
+
+Protocol: {request.protocol_name}
+Target Audience: {request.icp_name}
+About: {request.icp_description}
+Strategy: {request.outreach_strategy}
+Audience Size: {request.matching_wallets} matching wallets identified
+Key Behaviors: {', '.join(request.required_behaviors) if request.required_behaviors else 'active traders'}
+
+Generate ONE compelling tweet that would appeal to this target audience. Make it engaging and action-oriented."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.8,
+            max_tokens=300
+        )
+        
+        content = response.choices[0].message.content.strip()
+        
+        # Truncate if needed
+        if len(content) > 280:
+            content = content[:277] + "..."
+        
+        # Generate Twitter intent URL
+        import urllib.parse
+        encoded_text = urllib.parse.quote(content, safe='')
+        intent_url = f"https://twitter.com/intent/tweet?text={encoded_text}"
+        
+        return {
+            "content": content,
+            "character_count": len(content),
+            "intent_url": intent_url,
+            "ready_to_post": len(content) <= 280,
+            "post_type": request.post_type,
+            "protocol": request.protocol_name,
+            "target_audience": request.icp_name,
+            "generated_at": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Campaign post generation failed: {str(e)}")
 
 
 @app.post("/api/v1/search/natural", tags=["AI Intelligence"])
@@ -810,41 +966,47 @@ async def natural_language_search(
         try:
             cursor.execute(f'''
                 SELECT wallet_address, total_txs, total_volume_wei, 
-                       is_whale, is_bot, is_dex_user, last_active
+                       is_whale, is_bot, is_dex_user, last_active, first_seen
                 FROM wallet_profiles
                 WHERE {search_query.sql_where_clause}
                 ORDER BY CAST(total_volume_wei AS REAL) DESC
                 LIMIT ?
             ''', (request.max_results,))
             
-            wallets = []
+            results = []
             for row in cursor.fetchall():
-                wallets.append({
-                    "address": row['wallet_address'],
+                results.append({
+                    "wallet_address": row['wallet_address'],
                     "total_txs": row['total_txs'],
-                    "volume_avax": int(row['total_volume_wei'] or 0) / 1e18,
+                    "volume_avax": float(row['total_volume_wei'] or 0) / 1e18,
                     "is_whale": bool(row['is_whale']),
                     "is_bot": bool(row['is_bot']),
                     "is_dex_user": bool(row['is_dex_user']),
-                    "last_active": row['last_active']
+                    "first_seen": row['first_seen'],
+                    "last_seen": row['last_active']
                 })
             
+            # Return format matching dashboard expectations
             return {
                 "query": request.query,
-                "interpretation": search_query.explanation,
-                "sql_generated": search_query.sql_where_clause,
-                "wallets": wallets,
-                "count": len(wallets)
+                "interpretation": {
+                    "intent": "wallet_search",
+                    "filters": [search_query.explanation]
+                },
+                "results": results,
+                "total_matches": len(results)
             }
             
         except sqlite3.Error as e:
             return {
                 "query": request.query,
-                "interpretation": search_query.explanation,
-                "sql_generated": search_query.sql_where_clause,
+                "interpretation": {
+                    "intent": "wallet_search",
+                    "filters": [search_query.explanation]
+                },
                 "error": f"Query execution failed: {str(e)}",
-                "wallets": [],
-                "count": 0
+                "results": [],
+                "total_matches": 0
             }
         
     except Exception as e:

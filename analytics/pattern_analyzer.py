@@ -136,7 +136,7 @@ class PatternAnalyzer:
         for row in cursor.fetchall():
             patterns["new_whales"].append({
                 "address": row['wallet_address'],
-                "volume_avax": int(row['total_volume_wei'] or 0) / 1e18,
+                "volume_avax": float(row['total_volume_wei'] or 0) / 1e18,
                 "tx_count": row['total_txs'],
                 "first_seen": row['first_seen'],
                 "pattern": "new_whale"

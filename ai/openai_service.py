@@ -305,7 +305,7 @@ Provide actionable insights for reaching out to this wallet holder."""
         
         targets = []
         for row in cursor.fetchall():
-            volume_avax = int(row['total_volume_wei'] or 0) / 1e18
+            volume_avax = float(row['total_volume_wei'] or 0) / 1e18
             targets.append({
                 "address": row['wallet_address'],
                 "total_txs": row['total_txs'],
@@ -329,7 +329,7 @@ Provide actionable insights for reaching out to this wallet holder."""
         score = 0.0
         factors = 0
         
-        volume = int(wallet_row['total_volume_wei'] or 0) / 1e18
+        volume = float(wallet_row['total_volume_wei'] or 0) / 1e18
         
         # Volume score
         if criteria.min_volume_avax > 0:
@@ -417,7 +417,7 @@ Provide actionable insights for reaching out to this wallet holder."""
             return {
                 "address": row['wallet_address'],
                 "total_txs": row['total_txs'],
-                "volume_avax": int(row['total_volume_wei'] or 0) / 1e18,
+                "volume_avax": float(row['total_volume_wei'] or 0) / 1e18,
                 "unique_contracts": row['unique_contracts'] or 0,
                 "is_whale": bool(row['is_whale']),
                 "is_bot": bool(row['is_bot']),

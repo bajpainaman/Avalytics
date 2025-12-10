@@ -7,7 +7,15 @@ import json
 import sqlite3
 from pathlib import Path
 from web3 import Web3
-from web3.middleware import geth_poa_middleware
+
+# Handle different web3 versions for POA middleware
+try:
+    from web3.middleware import ExtraDataToPOAMiddleware as poa_middleware
+except ImportError:
+    try:
+        from web3.middleware import geth_poa_middleware as poa_middleware
+    except ImportError:
+        poa_middleware = None
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from . import config
@@ -16,7 +24,8 @@ class BlockExtractor:
     def __init__(self, rpc_url: str = config.RPC_URL, db_path: str = config.DB_PATH):
         self.w3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": 60}))
         # Add POA middleware for Avalanche C-Chain
-        self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+        if poa_middleware:
+            self.w3.middleware_onion.inject(poa_middleware, layer=0)
         self.db_path = db_path
 
         Path(config.OUTPUT_DIR).mkdir(parents=True, exist_ok=True)

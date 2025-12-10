@@ -79,6 +79,7 @@ export interface Cohort {
   wallet_count: number;
   avg_volume_avax: number;
   avg_txs: number;
+  whale_count?: number;
 }
 
 export interface CohortsResponse {
@@ -179,6 +180,34 @@ export interface ICPResponse {
 
 export const generateICP = (data: ICPRequest) =>
   fetchAPI<ICPResponse>('/api/v1/icp/generate', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+
+// ICP Campaign Post
+export interface ICPCampaignRequest {
+  protocol_name: string;
+  icp_name: string;
+  icp_description: string;
+  outreach_strategy: string;
+  matching_wallets: number;
+  required_behaviors: string[];
+  post_type: string;
+}
+
+export interface ICPCampaignPost {
+  content: string;
+  character_count: number;
+  intent_url: string;
+  ready_to_post: boolean;
+  post_type: string;
+  protocol: string;
+  target_audience: string;
+  generated_at: string;
+}
+
+export const generateICPCampaignPost = (data: ICPCampaignRequest) =>
+  fetchAPI<ICPCampaignPost>('/api/v1/icp/campaign-post', {
     method: 'POST',
     body: JSON.stringify(data),
   });

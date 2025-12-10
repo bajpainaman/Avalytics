@@ -17,13 +17,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.className} bg-slate-950 text-white`}>
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body className={`${inter.className} bg-background text-foreground`}>
         <Providers>
           <div className="flex h-screen overflow-hidden">
             <Sidebar />
-            <main className="flex-1 overflow-y-auto">
-              <div className="p-8">{children}</div>
+            <main className="flex-1 overflow-y-auto bg-background">
+              <div className="p-6 lg:p-8">{children}</div>
             </main>
           </div>
         </Providers>
